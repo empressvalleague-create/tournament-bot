@@ -6,7 +6,6 @@ from discord.ui import View, Button, Modal, TextInput
 import json, os
 from datetime import datetime
 from .faction_utils import get_faction_role, get_faction_channel
-from . import sheets as gsheets
 
 REQUESTS_FILE = "data/roster_requests.json"
 PURPLE = 0x9b59b6
@@ -460,19 +459,7 @@ class RequestAdminView(View):
                 dm_parts.append(f"**{req['remove_player_name']}** removed")
             dm_msg = f"Your roster change for **{req['team_name']}** was approved! " + ", ".join(dm_parts) + "."
 
-            if faction:
-                sheet_notes = []
-                try:
-                    if req.get("add_player_ign") and req.get("add_player_name"):
-                        result = gsheets.sheets_add_player(faction, req["team_name"], req["add_player_ign"], req["add_player_name"])
-                        sheet_notes.append(result)
-                    if req.get("remove_player_name"):
-                        result = gsheets.sheets_remove_player(faction, req["team_name"], req["remove_player_name"])
-                        sheet_notes.append(result)
-                except Exception as e:
-                    sheet_notes.append(f"Sheet error: {e}")
-                if sheet_notes and public_ch:
-                    await public_ch.send("Sheet update: " + " | ".join(sheet_notes))
+
 
         elif req["type"] == "sub":
             sub_in = guild.get_member(req["sub_in_id"])
@@ -510,14 +497,7 @@ class RequestAdminView(View):
 
             dm_msg = f"Your name change for **{req['team_name']}** was approved! **{req['old_ign']}** is now **{req['new_ign']}**."
 
-            if faction:
-                try:
-                    result = gsheets.sheets_update_ign(faction, req["team_name"], req["old_ign"], req["new_ign"])
-                    if public_ch:
-                        await public_ch.send(f"Sheet update: {result}")
-                except Exception as e:
-                    if public_ch:
-                        await public_ch.send(f"Sheet error: {e}")
+
         else:
             dm_msg = "Your request was approved!"
 
