@@ -4,7 +4,7 @@ from discord.ext import commands
 from discord import app_commands
 from discord.ui import View, Button, Select
 import json, os
-from datetime import datetime
+from datetime import datetime, timedelta
 from .faction_utils import get_faction_channel
 
 CONFIRM_FILE = "data/pending_confirms.json"
@@ -40,7 +40,9 @@ NA_TIMEZONES = [
     ("Atlantic Time (AT)",  "America/Halifax"),
 ]
 
-DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+def get_next_14_dates():
+    today = datetime.utcnow().date()
+    return [(today + timedelta(days=i)).strftime("%A, %b %d") for i in range(14)]
 
 TIMES = [
     "12:00 PM","12:30 PM",
@@ -57,7 +59,7 @@ def preview_embed(state):
     embed = discord.Embed(title="Match Time Preview", description="Does this look right?", color=PURPLE)
     embed.add_field(name="Team 1", value=f"<@&{state['team1_role_id']}>", inline=True)
     embed.add_field(name="Team 2", value=f"<@&{state['team2_role_id']}>", inline=True)
-    embed.add_field(name="Day", value=state["day"], inline=True)
+    embed.add_field(name="Date", value=state["day"], inline=True)
     embed.add_field(name="Time", value=state["time"], inline=True)
     embed.add_field(name="Timezone", value=state["timezone_label"], inline=True)
     return embed
@@ -106,15 +108,16 @@ class TimezoneSelect(Select):
         self.state["timezone"] = self.values[0]
         self.state["timezone_label"] = next(l for l, v in NA_TIMEZONES if v == self.values[0])
         await interaction.response.edit_message(
-            embed=step_embed("Step 2 of 3 - Pick a day", f"Timezone: **{self.state['timezone_label']}**"),
+            embed=step_embed("Step 2 of 3 - Pick a date", f"Timezone: **{self.state['timezone_label']}**"),
             view=DaySelectView(self.state)
         )
 
 class DaySelect(Select):
     def __init__(self, state):
         self.state = state
-        super().__init__(placeholder="Select the match day...", options=[
-            discord.SelectOption(label=d, value=d) for d in DAYS
+        dates = get_next_14_dates()
+        super().__init__(placeholder="Select the match date...", options=[
+            discord.SelectOption(label=d, value=d) for d in dates
         ])
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.state["requester_id"]:
@@ -122,7 +125,7 @@ class DaySelect(Select):
             return
         self.state["day"] = self.values[0]
         await interaction.response.edit_message(
-            embed=step_embed("Step 3 of 3 - Pick a time", f"Day: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
+            embed=step_embed("Step 3 of 3 - Pick a time", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
             view=TimeSelectView(self.state)
         )
 
