@@ -66,13 +66,18 @@ def preview_embed(state):
 
 def confirm_pending_embed(state, team1_role, team2_role):
     proposer = state["team1_name"] if state["requester_role_id"] == state["team1_role_id"] else state["team2_name"]
+    confirmed = state.get("confirmed_role_ids", [])
+    t1_status = "✅" if state["team1_role_id"] in confirmed else "⏳"
+    t2_status = "✅" if state["team2_role_id"] in confirmed else "⏳"
     embed = discord.Embed(
         title="Match Time Proposal",
         description=(
             f"## {team1_role.mention if team1_role else state['team1_name']}  vs  "
             f"{team2_role.mention if team2_role else state['team2_name']}\n"
             f"**{state['day']}** at **{state['time']}** {state['timezone_label']}\n\n"
-            f"Waiting for the opposing team to confirm..."
+            f"{t1_status} {state['team1_name']}\n"
+            f"{t2_status} {state['team2_name']}\n\n"
+            f"Both teams must confirm to finalize."
         ),
         color=PURPLE,
         timestamp=datetime.utcnow()
@@ -240,46 +245,60 @@ class OpponentApprovalView(View):
             await interaction.response.send_message("You must be on one of the two teams to confirm.", ephemeral=True)
             return
 
-        requester_role_id = state["requester_role_id"]
-        if requester_role_id in member_role_ids:
-            other_id = state["team2_role_id"] if requester_role_id == state["team1_role_id"] else state["team1_role_id"]
-            if other_id not in member_role_ids:
-                await interaction.response.send_message("The proposing team cannot confirm their own proposal.", ephemeral=True)
-                return
-
         pending = load_json(CONFIRM_FILE)
-        pending[self.key]["status"] = "confirmed"
-        pending[self.key]["confirmed_by"] = str(interaction.user)
-        save_json(CONFIRM_FILE, pending)
+        confirmed_ids = pending[self.key].setdefault("confirmed_role_ids", [])
 
-        await interaction.response.edit_message(
-            embed=confirm_approved_embed(state, team1_role, team2_role, interaction.user),
-            view=None
+        confirming_role_id = state["team1_role_id"] if is_team1 else state["team2_role_id"]
+        if confirming_role_id in confirmed_ids:
+            await interaction.response.send_message("Your team has already confirmed.", ephemeral=True)
+            return
+
+        confirmed_ids.append(confirming_role_id)
+        save_json(CONFIRM_FILE, pending)
+        state = pending[self.key]
+
+        both_confirmed = (
+            state["team1_role_id"] in confirmed_ids and
+            state["team2_role_id"] in confirmed_ids
         )
 
-        # Route to faction-specific #match-times based on the scheduling channel's category
-        faction = None
-        if interaction.channel.category:
-            cat_name = interaction.channel.category.name.lower()
-            if "devour" in cat_name:
-                faction = "devour"
-            elif "dismiss" in cat_name:
-                faction = "dismiss"
+        if both_confirmed:
+            pending[self.key]["status"] = "confirmed"
+            pending[self.key]["confirmed_by"] = str(interaction.user)
+            save_json(CONFIRM_FILE, pending)
 
-        times_ch = get_faction_channel(guild, faction, "match-times") if faction else get_channel_by_names(guild, "match-times", "Match-Times")
-        if times_ch:
-            pub = discord.Embed(
-                title="Match Scheduled!",
-                description=(
-                    f"## {team1_role.mention if team1_role else state['team1_name']}  vs  "
-                    f"{team2_role.mention if team2_role else state['team2_name']}\n"
-                    f"**{state['day']}** at **{state['time']}** {state['timezone_label']}"
-                ),
-                color=PURPLE,
-                timestamp=datetime.utcnow()
+            await interaction.response.edit_message(
+                embed=confirm_approved_embed(state, team1_role, team2_role, interaction.user),
+                view=None
             )
-            pub.set_footer(text=f"Confirmed by {interaction.user}")
-            await times_ch.send(embed=pub)
+
+            faction = None
+            if interaction.channel.category:
+                cat_name = interaction.channel.category.name.lower()
+                if "devour" in cat_name:
+                    faction = "devour"
+                elif "dismiss" in cat_name:
+                    faction = "dismiss"
+
+            times_ch = get_faction_channel(guild, faction, "match-times") if faction else get_channel_by_names(guild, "match-times", "Match-Times")
+            if times_ch:
+                pub = discord.Embed(
+                    title="Match Scheduled!",
+                    description=(
+                        f"## {team1_role.mention if team1_role else state['team1_name']}  vs  "
+                        f"{team2_role.mention if team2_role else state['team2_name']}\n"
+                        f"**{state['day']}** at **{state['time']}** {state['timezone_label']}"
+                    ),
+                    color=PURPLE,
+                    timestamp=datetime.utcnow()
+                )
+                pub.set_footer(text=f"Confirmed by both teams")
+                await times_ch.send(embed=pub)
+        else:
+            await interaction.response.edit_message(
+                embed=confirm_pending_embed(state, team1_role, team2_role),
+                view=self
+            )
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.red, custom_id="decline_match")
     async def decline(self, interaction: discord.Interaction, button: Button):
