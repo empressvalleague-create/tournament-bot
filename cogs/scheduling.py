@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 from .faction_utils import get_member_faction, get_faction_category
 
 SCHEDULE_FILE = "data/schedule_channels.json"
-AUTO_DELETE_DAYS = 12
+AUTO_DELETE_DAYS = 14
 PURPLE = 0x9b59b6
 
-SCHEDULE_MESSAGE = """All scheduling communications should occur in this channel. Please start the conversation with the following format:
+SCHEDULE_MESSAGE = """All scheduling communications should occur in this channel. **Please start the conversation with the following format:**
 
 Sunday - Times available.
 Monday - Times available.
@@ -20,7 +20,11 @@ Wednesday - Times available.
 Thursday - Times available.
 Friday - Times available.
 
-Use /confirm to finalize your match day and time! If you have a live match, simply use /confirm for your scheduled time! Map ban links will be sent shortly before live matches."""
+Use **/coinflip** if you want to initiate manual map bans
+
+Use **/confirm to finalize your match day and time!** If you have a live match, simply use /confirm for your scheduled time! Map ban links will be sent shortly before live matches.
+
+This channel will be deleted in 14 days."""
 
 
 def load_json(path):
