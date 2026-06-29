@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from .faction_utils import get_member_faction, get_faction_category
 
 SCHEDULE_FILE = "data/schedule_channels.json"
-AUTO_DELETE_DAYS = 8
+AUTO_DELETE_DAYS = 12
 PURPLE = 0x9b59b6
 
 SCHEDULE_MESSAGE = """All scheduling communications should occur in this channel. Please start the conversation with the following format:
@@ -111,13 +111,11 @@ class SchedulingChannels(commands.Cog):
             await interaction.followup.send(f"A scheduling channel already exists: {existing.mention}", ephemeral=True)
             return
 
-        faction, _ = get_member_faction(interaction.user)
-        category = get_faction_category(guild, faction) if faction else None
-        if not category:
-            category = discord.utils.get(guild.categories, name="Scheduling")
+        SCHEDULE_CATEGORY = "ᯓ★ SCHEDULE ★ᯓ"
+        category = discord.utils.get(guild.categories, name=SCHEDULE_CATEGORY)
         if not category:
             try:
-                category = await guild.create_category("Scheduling")
+                category = await guild.create_category(SCHEDULE_CATEGORY)
             except discord.Forbidden:
                 await interaction.followup.send("Missing permission to create categories.", ephemeral=True)
                 return
