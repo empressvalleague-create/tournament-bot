@@ -22,9 +22,7 @@ Friday - Times available.
 
 Use **/coinflip** if you want to initiate manual map bans
 
-Use **/confirm to finalize your match day and time!** If you have a live match, simply use /confirm for your scheduled time! Map ban links will be sent shortly before live matches.
-
-This channel will be deleted in 14 days."""
+Use **/confirm to finalize your match day and time!** If you have a live match, simply use /confirm for your scheduled time! Map ban links will be sent shortly before live matches."""
 
 
 def load_json(path):
