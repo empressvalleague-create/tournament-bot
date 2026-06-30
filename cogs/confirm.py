@@ -273,12 +273,16 @@ class OpponentApprovalView(View):
             )
 
             faction = None
-            if interaction.channel.category:
-                cat_name = interaction.channel.category.name.lower()
-                if "devour" in cat_name:
-                    faction = "devour"
-                elif "dismiss" in cat_name:
-                    faction = "dismiss"
+            for role_id in [state["team1_role_id"], state["team2_role_id"]]:
+                role = guild.get_role(role_id)
+                if role:
+                    name_lower = role.name.lower()
+                    if "devour" in name_lower:
+                        faction = "devour"
+                        break
+                    elif "dismiss" in name_lower:
+                        faction = "dismiss"
+                        break
 
             times_ch = get_faction_channel(guild, faction, "match-times") if faction else get_channel_by_names(guild, "match-times", "Match-Times")
             if times_ch:
