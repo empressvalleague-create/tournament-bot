@@ -131,6 +131,9 @@ class SchedulingChannels(commands.Cog):
         for role in guild.roles:
             if role.permissions.manage_guild and role not in overwrites:
                 overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        mod_role = discord.utils.find(lambda r: "moderator" in r.name.lower(), guild.roles)
+        if mod_role and mod_role not in overwrites:
+            overwrites[mod_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         try:
             text_ch = await guild.create_text_channel(
