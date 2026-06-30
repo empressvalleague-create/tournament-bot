@@ -272,17 +272,15 @@ class OpponentApprovalView(View):
                 view=None
             )
 
-            faction = None
-            for role_id in [state["team1_role_id"], state["team2_role_id"]]:
-                role = guild.get_role(role_id)
-                if role:
+            counts = {"devour": 0, "dismiss": 0}
+            for member in interaction.channel.members:
+                for role in member.roles:
                     name_lower = role.name.lower()
                     if "devour" in name_lower:
-                        faction = "devour"
-                        break
+                        counts["devour"] += 1
                     elif "dismiss" in name_lower:
-                        faction = "dismiss"
-                        break
+                        counts["dismiss"] += 1
+            faction = max(counts, key=counts.get) if any(counts.values()) else None
 
             times_ch = get_faction_channel(guild, faction, "match-times") if faction else get_channel_by_names(guild, "match-times", "Match-Times")
             if times_ch:
