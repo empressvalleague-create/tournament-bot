@@ -26,7 +26,8 @@ def is_schedule_channel(channel) -> bool:
         return False
     if channel.category is None:
         return False
-    return "scheduling" in channel.category.name.lower() or "devour" in channel.category.name.lower() or "dismiss" in channel.category.name.lower()
+    cat = channel.category.name.lower()
+    return "schedule" in cat or "scheduling" in cat or "devour" in cat or "dismiss" in cat
 
 def get_session(channel_id: int):
     return load_json(MAPBAN_FILE).get(str(channel_id))
