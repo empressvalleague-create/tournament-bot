@@ -58,25 +58,25 @@ class FactionSelectView(View):
         self.remove_name = remove_name      # str typed name or None
         self.sub_in = sub_in               # discord.Member
 
-    async def _open_modal(self, interaction: discord.Interaction, faction: str):
+    async def _open_modal(self, interaction: discord.Interaction, tier: str):
         if self.request_type == "roster_change":
             if self.add_player:
                 modal = RosterTrackerModal(
-                    faction=faction, team=self.team,
+                    tier=tier, team=self.team,
                     add_player=self.add_player,
                     remove_player=self.remove_player,
                     remove_name=self.remove_name
                 )
             else:
                 modal = RosterRemoveOnlyModal(
-                    faction=faction, team=self.team,
+                    tier=tier, team=self.team,
                     remove_player=self.remove_player,
                     remove_name=self.remove_name
                 )
         elif self.request_type == "sub":
-            modal = SubModal(faction=faction, team=self.team, sub_in=self.sub_in)
+            modal = SubModal(tier=tier, team=self.team, sub_in=self.sub_in)
         elif self.request_type == "name_change":
-            modal = NameChangeModal(faction=faction, team=self.team)
+            modal = NameChangeModal(tier=tier, team=self.team)
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Devour", style=discord.ButtonStyle.red)
@@ -110,9 +110,9 @@ class RosterTrackerModal(Modal, title="Roster Change - Player Details"):
         max_length=500
     )
 
-    def __init__(self, faction, team, add_player, remove_player, remove_name):
+    def __init__(self, tier, team, add_player, remove_player, remove_name):
         super().__init__()
-        self.faction = faction
+        self.tier = tier
         self.team = team
         self.add_player = add_player
         self.remove_player = remove_player
@@ -128,7 +128,7 @@ class RosterTrackerModal(Modal, title="Roster Change - Player Details"):
             "type": "roster_change",
             "requester_id": interaction.user.id,
             "requester_name": str(interaction.user),
-            "faction": self.faction,
+            "tier": self.tier,
             "team_role_id": self.team.id,
             "team_name": self.team.name,
             "add_player_id": self.add_player.id,
@@ -155,9 +155,9 @@ class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
         max_length=500
     )
 
-    def __init__(self, faction, team, remove_player, remove_name):
+    def __init__(self, tier, team, remove_player, remove_name):
         super().__init__()
-        self.faction = faction
+        self.tier = tier
         self.team = team
         self.remove_player = remove_player
         self.remove_name = remove_name
@@ -172,7 +172,7 @@ class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
             "type": "roster_change",
             "requester_id": interaction.user.id,
             "requester_name": str(interaction.user),
-            "faction": self.faction,
+            "tier": self.tier,
             "team_role_id": self.team.id,
             "team_name": self.team.name,
             "add_player_id": None,
@@ -192,12 +192,16 @@ class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
 async def _send_roster_request(interaction, req, key):
     admin_ch = get_channel_by_names(interaction.guild, "bot-requests", "admin-requests", "staff")
     if not admin_ch:
-        admin_ch = interaction.guild.text_channels[0]
+        await interaction.response.send_message(
+            "Could not find an admin channel (bot-requests / admin-requests / staff). Please ask an admin to set one up.",
+            ephemeral=True
+        )
+        return
 
     embed = discord.Embed(title="Roster Change Request", color=PURPLE, timestamp=datetime.utcnow())
     embed.add_field(name="Requested By", value=f"<@{req['requester_id']}>", inline=True)
     embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
-    embed.add_field(name="Faction", value=req['faction'].capitalize(), inline=True)
+    embed.add_field(name="Tier", value=req['tier'].capitalize(), inline=True)
     if req.get("add_player_id"):
         embed.add_field(name="Adding", value=f"<@{req['add_player_id']}>", inline=True)
     if req.get("add_player_ign"):
@@ -242,54 +246,63 @@ class SubModal(Modal, title="Sub Request - Details"):
         max_length=500
     )
 
-    def __init__(self, faction, team, sub_in):
+    def __init__(self, tier, team, sub_in):
         super().__init__()
-        self.faction = faction
+        self.tier = tier
         self.team = team
         self.sub_in = sub_in  # discord.Member
 
     async def on_submit(self, interaction: discord.Interaction):
-        sub_out_name = self.sub_out_text.value.strip() or None
-        key = make_key("sub", interaction.user.id)
-        requests = load_json(REQUESTS_FILE)
-        requests[key] = {
-            "type": "sub",
-            "requester_id": interaction.user.id,
-            "requester_name": str(interaction.user),
-            "faction": self.faction,
-            "team_role_id": self.team.id,
-            "team_name": self.team.name,
-            "sub_in_id": self.sub_in.id,
-            "sub_in_name": str(self.sub_in),
-            "sub_in_ign": self.sub_in_ign.value.strip() or None,
-            "sub_out_name": sub_out_name,
-            "tracker_link": self.tracker_link.value.strip(),
-            "note": self.note.value or None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "status": "pending"
-        }
-        save_json(REQUESTS_FILE, requests)
+        try:
+            sub_out_name = self.sub_out_text.value.strip() or None
+            key = make_key("sub", interaction.user.id)
+            requests = load_json(REQUESTS_FILE)
+            requests[key] = {
+                "type": "sub",
+                "requester_id": interaction.user.id,
+                "requester_name": str(interaction.user),
+                "tier": self.tier,
+                "team_role_id": self.team.id,
+                "team_name": self.team.name,
+                "sub_in_id": self.sub_in.id,
+                "sub_in_name": str(self.sub_in),
+                "sub_in_ign": self.sub_in_ign.value.strip() or None,
+                "sub_out_name": sub_out_name,
+                "tracker_link": self.tracker_link.value.strip(),
+                "note": self.note.value or None,
+                "timestamp": datetime.utcnow().isoformat(),
+                "status": "pending"
+            }
+            save_json(REQUESTS_FILE, requests)
 
-        admin_ch = get_channel_by_names(interaction.guild, "bot-requests", "admin-requests", "staff")
-        if not admin_ch:
-            admin_ch = interaction.guild.text_channels[0]
+            admin_ch = get_channel_by_names(interaction.guild, "bot-requests", "admin-requests", "staff")
+            if not admin_ch:
+                await interaction.response.send_message(
+                    "Could not find an admin channel (bot-requests / admin-requests / staff). Please ask an admin to set one up.",
+                    ephemeral=True
+                )
+                return
 
-        embed = discord.Embed(title="Sub Request", color=PURPLE, timestamp=datetime.utcnow())
-        embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
-        embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
-        embed.add_field(name="Faction", value=self.faction.capitalize(), inline=True)
-        embed.add_field(name="Subbing IN", value=f"<@{self.sub_in.id}>", inline=True)
-        if self.sub_in_ign.value:
-            embed.add_field(name="IGN", value=self.sub_in_ign.value, inline=True)
-        if sub_out_name:
-            embed.add_field(name="Sitting OUT", value=sub_out_name, inline=True)
-        embed.add_field(name="Tracker.gg", value=self.tracker_link.value, inline=False)
-        if self.note.value:
-            embed.add_field(name="Admin Note", value=self.note.value, inline=False)
-        embed.set_footer(text=f"ID: {key}")
+            embed = discord.Embed(title="Sub Request", color=PURPLE, timestamp=datetime.utcnow())
+            embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
+            embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
+            embed.add_field(name="Tier", value=self.tier.capitalize(), inline=True)
+            embed.add_field(name="Subbing IN", value=f"<@{self.sub_in.id}>", inline=True)
+            if self.sub_in_ign.value:
+                embed.add_field(name="IGN", value=self.sub_in_ign.value, inline=True)
+            if sub_out_name:
+                embed.add_field(name="Sitting OUT", value=sub_out_name, inline=True)
+            if self.tracker_link.value.strip():
+                embed.add_field(name="Tracker.gg", value=self.tracker_link.value.strip(), inline=False)
+            if self.note.value:
+                embed.add_field(name="Admin Note", value=self.note.value, inline=False)
+            embed.set_footer(text=f"ID: {key}")
 
-        await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView(key))
-        await interaction.response.send_message("Your sub request has been sent to admins!", ephemeral=True)
+            await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView(key))
+            await interaction.response.send_message("Your sub request has been sent to admins!", ephemeral=True)
+        except Exception as e:
+            print(f"SubModal error: {e}")
+            await interaction.response.send_message("Something went wrong submitting your request. Please try again.", ephemeral=True)
 
 
 # ─── Name Change Modal ────────────────────────────────────────────────────────
@@ -305,9 +318,9 @@ class NameChangeModal(Modal, title="Name Change Request"):
         max_length=500
     )
 
-    def __init__(self, faction, team):
+    def __init__(self, tier, team):
         super().__init__()
-        self.faction = faction
+        self.tier = tier
         self.team = team
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -317,7 +330,7 @@ class NameChangeModal(Modal, title="Name Change Request"):
             "type": "name_change",
             "requester_id": interaction.user.id,
             "requester_name": str(interaction.user),
-            "faction": self.faction,
+            "tier": self.tier,
             "team_role_id": self.team.id,
             "team_name": self.team.name,
             "old_ign": self.old_ign.value.strip(),
@@ -335,7 +348,7 @@ class NameChangeModal(Modal, title="Name Change Request"):
         embed = discord.Embed(title="Name Change Request", color=PURPLE, timestamp=datetime.utcnow())
         embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
         embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
-        embed.add_field(name="Faction", value=self.faction.capitalize(), inline=True)
+        embed.add_field(name="Faction", value=self.tier.capitalize(), inline=True)
         embed.add_field(name="Old IGN", value=self.old_ign.value, inline=True)
         embed.add_field(name="New IGN", value=self.new_ign.value, inline=True)
         if self.note.value:
@@ -412,9 +425,9 @@ class RequestAdminView(View):
         save_json(REQUESTS_FILE, requests)
 
         guild = interaction.guild
-        faction = req.get("faction")
-        faction_role = get_faction_role(guild, faction) if faction else None
-        public_ch = get_faction_channel(guild, faction, "roster-changes") if faction else get_channel_by_names(guild, "roster-changes")
+        tier = req.get("tier")
+        tier_role = get_faction_role(guild, tier) if tier else None
+        public_ch = get_faction_channel(guild, tier, "roster-changes") if tier else get_channel_by_names(guild, "roster-changes")
         team_role = guild.get_role(req["team_role_id"])
 
         if req["type"] == "roster_change":
@@ -425,8 +438,8 @@ class RequestAdminView(View):
                 if add_member:
                     try:
                         await add_member.add_roles(team_role, reason="Roster change approved")
-                        if faction_role:
-                            await add_member.add_roles(faction_role, reason="Roster change approved")
+                        if tier_role:
+                            await add_member.add_roles(tier_role, reason="Roster change approved")
                     except discord.Forbidden:
                         pass
                 if remove_member:
@@ -438,8 +451,8 @@ class RequestAdminView(View):
             if public_ch:
                 embed = discord.Embed(title="Roster Change", color=PURPLE, timestamp=datetime.utcnow())
                 embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
-                if faction:
-                    embed.add_field(name="Faction", value=faction.capitalize(), inline=True)
+                if tier:
+                    embed.add_field(name="Tier", value=tier.capitalize(), inline=True)
                 if req.get("add_player_id"):
                     embed.add_field(name="Added", value=f"<@{req['add_player_id']}>", inline=True)
                 if req.get("add_player_ign"):
@@ -466,16 +479,16 @@ class RequestAdminView(View):
             if team_role and sub_in:
                 try:
                     await sub_in.add_roles(team_role, reason="Sub approved")
-                    if faction_role:
-                        await sub_in.add_roles(faction_role, reason="Sub approved")
+                    if tier_role:
+                        await sub_in.add_roles(tier_role, reason="Sub approved")
                 except discord.Forbidden:
                     pass
 
             if public_ch:
                 embed = discord.Embed(title="Sub Approved", color=PURPLE, timestamp=datetime.utcnow())
                 embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
-                if faction:
-                    embed.add_field(name="Faction", value=faction.capitalize(), inline=True)
+                if tier:
+                    embed.add_field(name="Tier", value=tier.capitalize(), inline=True)
                 embed.add_field(name="Subbing IN", value=f"<@{req['sub_in_id']}>", inline=True)
                 if req.get("sub_out_name"):
                     embed.add_field(name="Sitting OUT", value=req["sub_out_name"], inline=True)
@@ -489,8 +502,8 @@ class RequestAdminView(View):
             if public_ch:
                 embed = discord.Embed(title="Name Change", color=PURPLE, timestamp=datetime.utcnow())
                 embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
-                if faction:
-                    embed.add_field(name="Faction", value=faction.capitalize(), inline=True)
+                if tier:
+                    embed.add_field(name="Tier", value=tier.capitalize(), inline=True)
                 embed.add_field(name="Old IGN", value=req["old_ign"], inline=True)
                 embed.add_field(name="New IGN", value=req["new_ign"], inline=True)
                 await public_ch.send(embed=embed)
@@ -558,7 +571,7 @@ class RosterManager(commands.Cog):
             remove_name=remove_player_name
         )
         await interaction.response.send_message(
-            embed=discord.Embed(title="Which faction is this for?", color=PURPLE),
+            embed=discord.Embed(title="Which tier is this for?", color=PURPLE),
             view=view,
             ephemeral=True
         )
@@ -576,7 +589,7 @@ class RosterManager(commands.Cog):
     ):
         view = FactionSelectView("sub", team, sub_in=sub_in)
         await interaction.response.send_message(
-            embed=discord.Embed(title="Which faction is this for?", color=PURPLE),
+            embed=discord.Embed(title="Which tier is this for?", color=PURPLE),
             view=view,
             ephemeral=True
         )
@@ -586,7 +599,7 @@ class RosterManager(commands.Cog):
     async def namechange(self, interaction: discord.Interaction, team: discord.Role):
         view = FactionSelectView("name_change", team)
         await interaction.response.send_message(
-            embed=discord.Embed(title="Which faction is this for?", color=PURPLE),
+            embed=discord.Embed(title="Which tier is this for?", color=PURPLE),
             view=view,
             ephemeral=True
         )
