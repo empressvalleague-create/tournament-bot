@@ -218,7 +218,7 @@ async def _send_roster_request(interaction, req, key):
         embed.add_field(name="Admin Note", value=req["note"], inline=False)
     embed.set_footer(text=f"ID: {key}")
 
-    await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView(key))
+    await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
     await interaction.response.send_message("Your roster change request has been sent to admins!", ephemeral=True)
 
 
@@ -302,7 +302,7 @@ class SubModal(Modal, title="Sub Request - Details"):
                 embed.add_field(name="Admin Note", value=self.note.value, inline=False)
             embed.set_footer(text=f"ID: {key}")
 
-            await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView(key))
+            await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
             await interaction.response.send_message("Your sub request has been sent to admins!", ephemeral=True)
         except Exception as e:
             print(f"SubModal error: {e}")
@@ -359,7 +359,7 @@ class NameChangeModal(Modal, title="Name Change Request"):
             embed.add_field(name="Admin Note", value=self.note.value, inline=False)
         embed.set_footer(text=f"ID: {key}")
 
-        await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView(key))
+        await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
         await interaction.response.send_message("Your name change request has been sent to admins!", ephemeral=True)
 
 
@@ -407,22 +407,33 @@ class DenyReasonModal(Modal, title="Deny Request - Add Reason"):
 
 # ─── Admin View ───────────────────────────────────────────────────────────────
 
+def _key_from_interaction(interaction: discord.Interaction):
+    """Read the request key from the embed footer (ID: <key>)."""
+    try:
+        footer = interaction.message.embeds[0].footer.text or ""
+        return footer.removeprefix("ID: ").strip() or None
+    except Exception:
+        return None
+
 class RequestAdminView(View):
-    def __init__(self, key):
+    def __init__(self):
         super().__init__(timeout=None)
-        self.key = key
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.green, custom_id="req_approve")
     async def approve(self, interaction: discord.Interaction, button: Button):
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.response.send_message("Admins only.", ephemeral=True)
             return
+        key = _key_from_interaction(interaction)
+        if not key:
+            await interaction.response.send_message("Could not read request ID from this message.", ephemeral=True)
+            return
         requests = load_json(REQUESTS_FILE)
-        if self.key not in requests:
+        if key not in requests:
             await interaction.response.send_message("Already processed.", ephemeral=True)
             return
 
-        req = requests[self.key]
+        req = requests[key]
         req["status"] = "approved"
         req["approved_by"] = str(interaction.user)
         req["approved_at"] = datetime.utcnow().isoformat()
@@ -535,11 +546,15 @@ class RequestAdminView(View):
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.response.send_message("Admins only.", ephemeral=True)
             return
+        key = _key_from_interaction(interaction)
+        if not key:
+            await interaction.response.send_message("Could not read request ID from this message.", ephemeral=True)
+            return
         requests = load_json(REQUESTS_FILE)
-        if self.key not in requests:
+        if key not in requests:
             await interaction.response.send_message("Already processed.", ephemeral=True)
             return
-        await interaction.response.send_modal(DenyReasonModal(self.key, interaction.message))
+        await interaction.response.send_modal(DenyReasonModal(key, interaction.message))
 
 
 # ─── Cog ──────────────────────────────────────────────────────────────────────
@@ -547,6 +562,9 @@ class RequestAdminView(View):
 class RosterManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    async def cog_load(self):
+        self.bot.add_view(RequestAdminView())
 
     @app_commands.command(name="rosterchange", description="Request a roster change for your team")
     @app_commands.describe(
