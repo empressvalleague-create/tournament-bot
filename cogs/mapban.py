@@ -6,8 +6,8 @@ from discord.ui import View, Button
 import json, os, random
 from datetime import datetime
 
-MAPBAN_FILE = "data/mapban_sessions.json"
-POOL_FILE   = "data/map_pool.json"
+MAPBAN_FILE = "/opt/render/project/src/data/mapban_sessions.json"
+POOL_FILE   = "/opt/render/project/src/data/map_pool.json"
 PURPLE = 0x9b59b6
 
 def load_json(path):

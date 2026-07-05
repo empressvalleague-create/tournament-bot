@@ -7,7 +7,7 @@ import json, os
 from datetime import datetime, timedelta
 from .faction_utils import get_faction_channel
 
-CONFIRM_FILE = "data/pending_confirms.json"
+CONFIRM_FILE = "/opt/render/project/src/data/pending_confirms.json"
 PURPLE = 0x9b59b6
 
 def load_json(path):

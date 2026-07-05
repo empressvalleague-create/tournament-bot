@@ -7,7 +7,7 @@ import json, os
 from datetime import datetime
 from .faction_utils import get_faction_role, get_faction_channel
 
-REQUESTS_FILE = "data/roster_requests.json"
+REQUESTS_FILE = "/opt/render/project/src/data/roster_requests.json"
 PURPLE = 0x9b59b6
 
 

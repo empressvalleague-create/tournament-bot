@@ -7,7 +7,7 @@ import json, os, asyncio
 from datetime import datetime, timedelta
 from .faction_utils import get_member_faction, get_faction_category
 
-SCHEDULE_FILE = "data/schedule_channels.json"
+SCHEDULE_FILE = "/opt/render/project/src/data/schedule_channels.json"
 AUTO_DELETE_DAYS = 14
 PURPLE = 0x9b59b6
 
