@@ -205,16 +205,14 @@ async def _send_roster_request(interaction, req, key, original_interaction=None)
         return
 
     embed = discord.Embed(title="Roster Change Request", color=PURPLE, timestamp=datetime.utcnow())
-    embed.add_field(name="Requested By", value=f"<@{req['requester_id']}>", inline=True)
+    embed.add_field(name="Requested By", value=req["requester_name"], inline=True)
     embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
     embed.add_field(name="Tier", value=req['tier'].capitalize(), inline=True)
-    if req.get("add_player_id"):
-        embed.add_field(name="Adding", value=f"<@{req['add_player_id']}>", inline=True)
+    if req.get("add_player_name"):
+        embed.add_field(name="Adding", value=req["add_player_name"], inline=True)
     if req.get("add_player_ign"):
         embed.add_field(name="IGN", value=req["add_player_ign"], inline=True)
-    if req.get("remove_player_id"):
-        embed.add_field(name="Removing", value=f"<@{req['remove_player_id']}>", inline=True)
-    elif req.get("remove_player_name"):
+    if req.get("remove_player_name"):
         embed.add_field(name="Removing", value=req["remove_player_name"], inline=True)
     if req.get("tracker_link"):
         embed.add_field(name="Tracker.gg", value=req["tracker_link"], inline=False)
@@ -296,15 +294,13 @@ class SubModal(Modal, title="Sub Request - Details"):
                 return
 
             embed = discord.Embed(title="Sub Request", color=PURPLE, timestamp=datetime.utcnow())
-            embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
+            embed.add_field(name="Requested By", value=str(interaction.user), inline=True)
             embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
             embed.add_field(name="Tier", value=self.tier.capitalize(), inline=True)
-            embed.add_field(name="Subbing IN", value=f"<@{self.sub_in.id}>", inline=True)
+            embed.add_field(name="Subbing IN", value=str(self.sub_in), inline=True)
             if self.sub_in_ign.value:
                 embed.add_field(name="IGN", value=self.sub_in_ign.value, inline=True)
-            if sub_out_id:
-                embed.add_field(name="Sitting OUT", value=f"<@{sub_out_id}>", inline=True)
-            elif sub_out_name:
+            if sub_out_name:
                 embed.add_field(name="Sitting OUT", value=sub_out_name, inline=True)
             if self.tracker_link.value.strip():
                 embed.add_field(name="Tracker.gg", value=self.tracker_link.value.strip(), inline=False)
@@ -370,7 +366,7 @@ class NameChangeModal(Modal, title="Name Change Request"):
             return
 
         embed = discord.Embed(title="Name Change Request", color=PURPLE, timestamp=datetime.utcnow())
-        embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
+        embed.add_field(name="Requested By", value=str(interaction.user), inline=True)
         embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
         embed.add_field(name="Tier", value=self.tier.capitalize(), inline=True)
         embed.add_field(name="Old IGN", value=self.old_ign.value, inline=True)
@@ -493,13 +489,11 @@ class RequestAdminView(View):
                 embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
                 if tier:
                     embed.add_field(name="Tier", value=tier.capitalize(), inline=True)
-                if req.get("add_player_id"):
-                    embed.add_field(name="Added", value=f"<@{req['add_player_id']}>", inline=True)
+                if req.get("add_player_name"):
+                    embed.add_field(name="Added", value=req["add_player_name"], inline=True)
                 if req.get("add_player_ign"):
                     embed.add_field(name="IGN", value=req["add_player_ign"], inline=True)
-                if req.get("remove_player_id"):
-                    embed.add_field(name="Removed", value=f"<@{req['remove_player_id']}>", inline=True)
-                elif req.get("remove_player_name"):
+                if req.get("remove_player_name"):
                     embed.add_field(name="Removed", value=req["remove_player_name"], inline=True)
                 if req.get("tracker_link"):
                     embed.add_field(name="Tracker.gg", value=req["tracker_link"], inline=False)
@@ -529,7 +523,7 @@ class RequestAdminView(View):
                 embed.add_field(name="Team", value=f"<@&{req['team_role_id']}>", inline=True)
                 if tier:
                     embed.add_field(name="Tier", value=tier.capitalize(), inline=True)
-                embed.add_field(name="Subbing IN", value=f"<@{req['sub_in_id']}>", inline=True)
+                embed.add_field(name="Subbing IN", value=req.get("sub_in_name", str(req["sub_in_id"])), inline=True)
                 if req.get("sub_out_name"):
                     embed.add_field(name="Sitting OUT", value=req["sub_out_name"], inline=True)
                 if req.get("tracker_link"):
