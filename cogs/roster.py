@@ -49,14 +49,16 @@ def get_mod_ping(guild):
 # ─── Faction picker ───────────────────────────────────────────────────────────
 
 class FactionSelectView(View):
-    def __init__(self, request_type: str, team, add_player=None, remove_player=None, remove_name=None, sub_in=None):
+    def __init__(self, request_type: str, team, add_player=None, remove_player=None, remove_name=None, sub_in=None, sub_out=None, sub_out_name=None):
         super().__init__(timeout=60)
         self.request_type = request_type
         self.team = team
-        self.add_player = add_player        # discord.Member or None
-        self.remove_player = remove_player  # discord.Member or None
-        self.remove_name = remove_name      # str typed name or None
-        self.sub_in = sub_in               # discord.Member
+        self.add_player = add_player
+        self.remove_player = remove_player
+        self.remove_name = remove_name
+        self.sub_in = sub_in
+        self.sub_out = sub_out
+        self.sub_out_name = sub_out_name
 
     async def _open_modal(self, interaction: discord.Interaction, tier: str):
         if self.request_type == "roster_change":
@@ -74,7 +76,7 @@ class FactionSelectView(View):
                     remove_name=self.remove_name
                 )
         elif self.request_type == "sub":
-            modal = SubModal(tier=tier, team=self.team, sub_in=self.sub_in)
+            modal = SubModal(tier=tier, team=self.team, sub_in=self.sub_in, sub_out=self.sub_out, sub_out_name=self.sub_out_name)
         elif self.request_type == "name_change":
             modal = NameChangeModal(tier=tier, team=self.team)
         await interaction.response.send_modal(modal)
@@ -233,11 +235,6 @@ class SubModal(Modal, title="Sub Request - Details"):
         placeholder="https://tracker.gg/...",
         required=True
     )
-    sub_out_text = TextInput(
-        label="Player sitting out (name/IGN if they left server)",
-        placeholder="Leave blank if not applicable or already selected",
-        required=False
-    )
     note = TextInput(
         label="Reasoning/Notes for Admin (optional)",
         placeholder="Any context for the admins",
@@ -246,15 +243,19 @@ class SubModal(Modal, title="Sub Request - Details"):
         max_length=500
     )
 
-    def __init__(self, tier, team, sub_in):
+    def __init__(self, tier, team, sub_in, sub_out=None, sub_out_name=None):
         super().__init__()
         self.tier = tier
         self.team = team
-        self.sub_in = sub_in  # discord.Member
+        self.sub_in = sub_in
+        self.sub_out = sub_out          # discord.Member or None
+        self.sub_out_name = sub_out_name  # str or None
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            sub_out_name = self.sub_out_text.value.strip() or None
+            sub_out_id   = self.sub_out.id   if self.sub_out else None
+            sub_out_name = str(self.sub_out) if self.sub_out else self.sub_out_name
+
             key = make_key("sub", interaction.user.id)
             requests = load_json(REQUESTS_FILE)
             requests[key] = {
@@ -267,6 +268,7 @@ class SubModal(Modal, title="Sub Request - Details"):
                 "sub_in_id": self.sub_in.id,
                 "sub_in_name": str(self.sub_in),
                 "sub_in_ign": self.sub_in_ign.value.strip() or None,
+                "sub_out_id": sub_out_id,
                 "sub_out_name": sub_out_name,
                 "tracker_link": self.tracker_link.value.strip(),
                 "note": self.note.value or None,
@@ -290,7 +292,9 @@ class SubModal(Modal, title="Sub Request - Details"):
             embed.add_field(name="Subbing IN", value=f"<@{self.sub_in.id}>", inline=True)
             if self.sub_in_ign.value:
                 embed.add_field(name="IGN", value=self.sub_in_ign.value, inline=True)
-            if sub_out_name:
+            if sub_out_id:
+                embed.add_field(name="Sitting OUT", value=f"<@{sub_out_id}>", inline=True)
+            elif sub_out_name:
                 embed.add_field(name="Sitting OUT", value=sub_out_name, inline=True)
             if self.tracker_link.value.strip():
                 embed.add_field(name="Tracker.gg", value=self.tracker_link.value.strip(), inline=False)
@@ -579,15 +583,19 @@ class RosterManager(commands.Cog):
     @app_commands.command(name="subrequest", description="Request a sub for your team")
     @app_commands.describe(
         team="The team role",
-        sub_in="Player subbing in"
+        sub_in="Player subbing in",
+        sub_out="Player sitting out — use this if they're still in the server",
+        sub_out_name="Player sitting out by name — use this if they LEFT the server"
     )
     async def subrequest(
         self,
         interaction: discord.Interaction,
         team: discord.Role,
-        sub_in: discord.Member
+        sub_in: discord.Member,
+        sub_out: discord.Member = None,
+        sub_out_name: str = None
     ):
-        view = FactionSelectView("sub", team, sub_in=sub_in)
+        view = FactionSelectView("sub", team, sub_in=sub_in, sub_out=sub_out, sub_out_name=sub_out_name)
         await interaction.response.send_message(
             embed=discord.Embed(title="Which tier is this for?", color=PURPLE),
             view=view,
