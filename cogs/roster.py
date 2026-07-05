@@ -67,18 +67,20 @@ class FactionSelectView(View):
                     tier=tier, team=self.team,
                     add_player=self.add_player,
                     remove_player=self.remove_player,
-                    remove_name=self.remove_name
+                    remove_name=self.remove_name,
+                    original_interaction=interaction
                 )
             else:
                 modal = RosterRemoveOnlyModal(
                     tier=tier, team=self.team,
                     remove_player=self.remove_player,
-                    remove_name=self.remove_name
+                    remove_name=self.remove_name,
+                    original_interaction=interaction
                 )
         elif self.request_type == "sub":
-            modal = SubModal(tier=tier, team=self.team, sub_in=self.sub_in, sub_out=self.sub_out, sub_out_name=self.sub_out_name)
+            modal = SubModal(tier=tier, team=self.team, sub_in=self.sub_in, sub_out=self.sub_out, sub_out_name=self.sub_out_name, original_interaction=interaction)
         elif self.request_type == "name_change":
-            modal = NameChangeModal(tier=tier, team=self.team)
+            modal = NameChangeModal(tier=tier, team=self.team, original_interaction=interaction)
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Devour", style=discord.ButtonStyle.red)
@@ -112,13 +114,14 @@ class RosterTrackerModal(Modal, title="Roster Change - Player Details"):
         max_length=500
     )
 
-    def __init__(self, tier, team, add_player, remove_player, remove_name):
+    def __init__(self, tier, team, add_player, remove_player, remove_name, original_interaction=None):
         super().__init__()
         self.tier = tier
         self.team = team
         self.add_player = add_player
         self.remove_player = remove_player
         self.remove_name = remove_name
+        self.original_interaction = original_interaction
 
     async def on_submit(self, interaction: discord.Interaction):
         remove_id   = self.remove_player.id   if self.remove_player else None
@@ -144,7 +147,7 @@ class RosterTrackerModal(Modal, title="Roster Change - Player Details"):
             "status": "pending"
         }
         save_json(REQUESTS_FILE, requests)
-        await _send_roster_request(interaction, requests[key], key)
+        await _send_roster_request(interaction, requests[key], key, self.original_interaction)
 
 
 class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
@@ -157,12 +160,13 @@ class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
         max_length=500
     )
 
-    def __init__(self, tier, team, remove_player, remove_name):
+    def __init__(self, tier, team, remove_player, remove_name, original_interaction=None):
         super().__init__()
         self.tier = tier
         self.team = team
         self.remove_player = remove_player
         self.remove_name = remove_name
+        self.original_interaction = original_interaction
 
     async def on_submit(self, interaction: discord.Interaction):
         remove_id   = self.remove_player.id   if self.remove_player else None
@@ -188,10 +192,10 @@ class RosterRemoveOnlyModal(Modal, title="Roster Change - Remove Player"):
             "status": "pending"
         }
         save_json(REQUESTS_FILE, requests)
-        await _send_roster_request(interaction, requests[key], key)
+        await _send_roster_request(interaction, requests[key], key, self.original_interaction)
 
 
-async def _send_roster_request(interaction, req, key):
+async def _send_roster_request(interaction, req, key, original_interaction=None):
     admin_ch = get_channel_by_names(interaction.guild, "bot-requests", "admin-requests", "staff")
     if not admin_ch:
         await interaction.response.send_message(
@@ -220,6 +224,11 @@ async def _send_roster_request(interaction, req, key):
 
     await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
     await interaction.response.send_message("Your roster change request has been sent to admins!", ephemeral=True)
+    if original_interaction:
+        try:
+            await original_interaction.edit_original_response(content="✅ Request sent!", embed=None, view=None)
+        except Exception:
+            pass
 
 
 # ─── Sub Modal ────────────────────────────────────────────────────────────────
@@ -243,13 +252,14 @@ class SubModal(Modal, title="Sub Request - Details"):
         max_length=500
     )
 
-    def __init__(self, tier, team, sub_in, sub_out=None, sub_out_name=None):
+    def __init__(self, tier, team, sub_in, sub_out=None, sub_out_name=None, original_interaction=None):
         super().__init__()
         self.tier = tier
         self.team = team
         self.sub_in = sub_in
-        self.sub_out = sub_out          # discord.Member or None
-        self.sub_out_name = sub_out_name  # str or None
+        self.sub_out = sub_out
+        self.sub_out_name = sub_out_name
+        self.original_interaction = original_interaction
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -304,6 +314,11 @@ class SubModal(Modal, title="Sub Request - Details"):
 
             await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
             await interaction.response.send_message("Your sub request has been sent to admins!", ephemeral=True)
+            if self.original_interaction:
+                try:
+                    await self.original_interaction.edit_original_response(content="✅ Request sent!", embed=None, view=None)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"SubModal error: {e}")
             await interaction.response.send_message("Something went wrong submitting your request. Please try again.", ephemeral=True)
@@ -322,10 +337,11 @@ class NameChangeModal(Modal, title="Name Change Request"):
         max_length=500
     )
 
-    def __init__(self, tier, team):
+    def __init__(self, tier, team, original_interaction=None):
         super().__init__()
         self.tier = tier
         self.team = team
+        self.original_interaction = original_interaction
 
     async def on_submit(self, interaction: discord.Interaction):
         key = make_key("nc", interaction.user.id)
@@ -347,12 +363,16 @@ class NameChangeModal(Modal, title="Name Change Request"):
 
         admin_ch = get_channel_by_names(interaction.guild, "bot-requests", "admin-requests", "staff")
         if not admin_ch:
-            admin_ch = interaction.guild.text_channels[0]
+            await interaction.response.send_message(
+                "Could not find an admin channel (bot-requests / admin-requests / staff). Please ask an admin to set one up.",
+                ephemeral=True
+            )
+            return
 
         embed = discord.Embed(title="Name Change Request", color=PURPLE, timestamp=datetime.utcnow())
         embed.add_field(name="Requested By", value=f"<@{interaction.user.id}>", inline=True)
         embed.add_field(name="Team", value=f"<@&{self.team.id}>", inline=True)
-        embed.add_field(name="Faction", value=self.tier.capitalize(), inline=True)
+        embed.add_field(name="Tier", value=self.tier.capitalize(), inline=True)
         embed.add_field(name="Old IGN", value=self.old_ign.value, inline=True)
         embed.add_field(name="New IGN", value=self.new_ign.value, inline=True)
         if self.note.value:
@@ -361,6 +381,11 @@ class NameChangeModal(Modal, title="Name Change Request"):
 
         await admin_ch.send(content=get_mod_ping(interaction.guild), embed=embed, view=RequestAdminView())
         await interaction.response.send_message("Your name change request has been sent to admins!", ephemeral=True)
+        if self.original_interaction:
+            try:
+                await self.original_interaction.edit_original_response(content="✅ Request sent!", embed=None, view=None)
+            except Exception:
+                pass
 
 
 # ─── Deny Reason Modal ────────────────────────────────────────────────────────
