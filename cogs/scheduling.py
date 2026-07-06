@@ -40,22 +40,29 @@ def save_json(path, data):
 
 
 class CloseChannelView(View):
-    def __init__(self, text_id: int, creator_id: int, key: str):
+    def __init__(self):
         super().__init__(timeout=None)
-        self.text_id = text_id
-        self.creator_id = creator_id
-        self.key = key
 
     @discord.ui.button(label="Close Channel", style=discord.ButtonStyle.red, custom_id="close_schedule_ch")
     async def close(self, interaction: discord.Interaction, button: Button):
-        is_admin = interaction.user.guild_permissions.manage_channels
-        is_creator = interaction.user.id == self.creator_id
-        if not (is_admin or is_creator):
-            await interaction.response.send_message("Only the creator or an admin can close this.", ephemeral=True)
+        # Look up entry by channel ID so this survives bot restarts
+        data = load_json(SCHEDULE_FILE)
+        key = next((k for k, v in data.items() if v.get("text_channel_id") == interaction.channel.id), None)
+
+        # Allow anyone with a role in this channel, or manage_channels permission
+        has_permission = interaction.user.guild_permissions.manage_channels
+        if not has_permission:
+            allowed_role_ids = {r.id for r in interaction.channel.overwrites if isinstance(r, discord.Role)}
+            user_role_ids = {r.id for r in interaction.user.roles}
+            has_permission = bool(allowed_role_ids & user_role_ids)
+
+        if not has_permission:
+            await interaction.response.send_message("You don't have permission to close this channel.", ephemeral=True)
             return
+
         await interaction.response.send_message("Closing this channel in 5 seconds...")
         await asyncio.sleep(5)
-        await _delete_schedule(interaction.guild, self.text_id, self.key)
+        await _delete_schedule(interaction.guild, interaction.channel.id, key)
 
 
 async def _delete_schedule(guild: discord.Guild, text_id: int, key: str):
@@ -76,6 +83,7 @@ class SchedulingChannels(commands.Cog):
         self._cleanup_task = None
 
     async def cog_load(self):
+        self.bot.add_view(CloseChannelView())
         self._cleanup_task = self.bot.loop.create_task(self._auto_delete_loop())
 
     async def cog_unload(self):
@@ -168,7 +176,7 @@ class SchedulingChannels(commands.Cog):
         embed.add_field(name="Auto-Delete", value=f"This channel will be deleted in **{AUTO_DELETE_DAYS} days**.", inline=True)
         embed.set_footer(text=f"Created by {interaction.user}")
 
-        close_view = CloseChannelView(text_ch.id, interaction.user.id, key)
+        close_view = CloseChannelView()
         msg = await text_ch.send(content=f"{team1_role.mention} {team2_role.mention}", embed=embed, view=close_view)
         try:
             await msg.pin()

@@ -442,8 +442,9 @@ class RequestAdminView(View):
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.green, custom_id="req_approve")
     async def approve(self, interaction: discord.Interaction, button: Button):
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message("Admins only.", ephemeral=True)
+        is_mod = any("moderator" in r.name.lower() for r in interaction.user.roles)
+        if not interaction.user.guild_permissions.manage_guild and not is_mod:
+            await interaction.response.send_message("Admins and moderators only.", ephemeral=True)
             return
         key = _key_from_interaction(interaction)
         if not key:
@@ -562,8 +563,9 @@ class RequestAdminView(View):
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, custom_id="req_deny")
     async def deny(self, interaction: discord.Interaction, button: Button):
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message("Admins only.", ephemeral=True)
+        is_mod = any("moderator" in r.name.lower() for r in interaction.user.roles)
+        if not interaction.user.guild_permissions.manage_guild and not is_mod:
+            await interaction.response.send_message("Admins and moderators only.", ephemeral=True)
             return
         key = _key_from_interaction(interaction)
         if not key:

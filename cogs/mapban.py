@@ -275,6 +275,11 @@ class PickTeamView(View):
         }
         save_session(self.channel_id, session)
         await interaction.response.edit_message(embed=summary_embed(session), view=MapBanView(session, self.channel_id))
+        try:
+            msg = await interaction.original_response()
+            await msg.pin()
+        except Exception:
+            pass
 
 
 class MapBan(commands.Cog):
