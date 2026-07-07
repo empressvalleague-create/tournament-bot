@@ -44,8 +44,11 @@ def get_next_14_dates():
     today = datetime.utcnow().date()
     return [(today + timedelta(days=i)).strftime("%A, %b %d") for i in range(14)]
 
-TIMES = [
+AM_TIMES = [
     "9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM",
+]
+
+PM_TIMES = [
     "12:00 PM","12:30 PM",
     "1:00 PM","1:30 PM","2:00 PM","2:30 PM","3:00 PM","3:30 PM",
     "4:00 PM","4:30 PM","5:00 PM","5:30 PM","6:00 PM","6:30 PM",
@@ -131,15 +134,15 @@ class DaySelect(Select):
             return
         self.state["day"] = self.values[0]
         await interaction.response.edit_message(
-            embed=step_embed("Step 3 of 3 - Pick a time", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
-            view=TimeSelectView(self.state)
+            embed=step_embed("Step 3 of 4 - Pick a time of day", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
+            view=TimePeriodView(self.state)
         )
 
 class TimeSelect(Select):
-    def __init__(self, state):
+    def __init__(self, state, times):
         self.state = state
         super().__init__(placeholder="Select the match time...", options=[
-            discord.SelectOption(label=t, value=t) for t in TIMES
+            discord.SelectOption(label=t, value=t) for t in times
         ])
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.state["requester_id"]:
@@ -158,10 +161,35 @@ class DaySelectView(View):
         super().__init__(timeout=180)
         self.add_item(DaySelect(state))
 
-class TimeSelectView(View):
+class TimePeriodView(View):
     def __init__(self, state):
         super().__init__(timeout=180)
-        self.add_item(TimeSelect(state))
+        self.state = state
+
+    @discord.ui.button(label="Before Noon", style=discord.ButtonStyle.blurple)
+    async def before_noon(self, interaction: discord.Interaction, button):
+        if interaction.user.id != self.state["requester_id"]:
+            await interaction.response.send_message("Not your request.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            embed=step_embed("Step 4 of 4 - Pick a time", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
+            view=TimeSelectView(self.state, AM_TIMES)
+        )
+
+    @discord.ui.button(label="After Noon", style=discord.ButtonStyle.grey)
+    async def after_noon(self, interaction: discord.Interaction, button):
+        if interaction.user.id != self.state["requester_id"]:
+            await interaction.response.send_message("Not your request.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            embed=step_embed("Step 4 of 4 - Pick a time", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
+            view=TimeSelectView(self.state, PM_TIMES)
+        )
+
+class TimeSelectView(View):
+    def __init__(self, state, times):
+        super().__init__(timeout=180)
+        self.add_item(TimeSelect(state, times))
 
 
 class SendConfirmView(View):
@@ -212,8 +240,8 @@ class SendConfirmView(View):
             return
         self.state.pop("time", None)
         await interaction.response.edit_message(
-            embed=step_embed("Step 3 of 3 - Pick a time", f"Day: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
-            view=TimeSelectView(self.state)
+            embed=step_embed("Step 3 of 4 - Pick a time of day", f"Date: **{self.state['day']}** - TZ: **{self.state['timezone_label']}**"),
+            view=TimePeriodView(self.state)
         )
 
 
