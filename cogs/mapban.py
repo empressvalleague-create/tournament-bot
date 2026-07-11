@@ -107,72 +107,79 @@ def summary_embed(session: dict, done: bool = False) -> discord.Embed:
     return embed
 
 
+class MapButton(discord.ui.Button):
+    def __init__(self, label, style, channel_id, role_id, action, team_key, value):
+        super().__init__(label=label, style=style)
+        self.channel_id = channel_id
+        self.role_id    = role_id
+        self.action     = action
+        self.team_key   = team_key
+        self.value      = value  # map name or "Attack"/"Defense"
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if self.role_id not in [r.id for r in interaction.user.roles]:
+                await interaction.response.send_message("It's not your turn.", ephemeral=True)
+                return
+            session = get_session(self.channel_id)
+            if not session:
+                await interaction.response.send_message("No active map ban session found.", ephemeral=True)
+                return
+
+            if self.action == "ban":
+                session["bans"].append(self.value)
+            elif self.action == "pick":
+                session["picks"].append(self.value)
+            elif self.action == "side":
+                other_key = "team2" if self.team_key == "team1" else "team1"
+                attacker = session[self.team_key + "_name"] if self.value == "Attack" else session[other_key + "_name"]
+                session["sides"].append(attacker)
+
+            session["step"] += 1
+            save_session(self.channel_id, session)
+
+            if session["step"] >= len(STEPS):
+                await interaction.response.edit_message(embed=summary_embed(session, done=True), view=None)
+                delete_session(self.channel_id)
+            else:
+                await interaction.response.edit_message(embed=summary_embed(session), view=MapBanView(session, self.channel_id))
+        except Exception as e:
+            print(f"MapButton error: {e}")
+            try:
+                await interaction.response.send_message("Something went wrong. Please try again.", ephemeral=True)
+            except Exception:
+                pass
+
+
 class MapBanView(View):
     def __init__(self, session: dict, channel_id: int):
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
         self.channel_id = channel_id
         step = session["step"]
         team_key, action = STEPS[step]
-        self.role_id  = session[team_key + "_role_id"]
-        self.action   = action
-        self.team_key = team_key
+        role_id = session[team_key + "_role_id"]
 
         if action in ("ban", "pick"):
             used = set(session.get("bans", [])) | set(session.get("picks", []))
             available = [m for m in session.get("pool", []) if m not in used]
             style = discord.ButtonStyle.red if action == "ban" else discord.ButtonStyle.green
             for map_name in available:
-                btn = discord.ui.Button(label=map_name, style=style)
-                btn.callback = self._make_map_callback(map_name)
-                self.add_item(btn)
+                self.add_item(MapButton(
+                    label=map_name, style=style,
+                    channel_id=channel_id, role_id=role_id,
+                    action=action, team_key=team_key, value=map_name
+                ))
         elif action == "side":
-            atk = discord.ui.Button(label="Attack", style=discord.ButtonStyle.blurple)
-            atk.callback = self._make_side_callback("Attack")
-            self.add_item(atk)
-            dfn = discord.ui.Button(label="Defense", style=discord.ButtonStyle.grey)
-            dfn.callback = self._make_side_callback("Defense")
-            self.add_item(dfn)
-
-    def _make_map_callback(self, map_name: str):
-        async def callback(interaction: discord.Interaction):
-            if self.role_id not in [r.id for r in interaction.user.roles]:
-                await interaction.response.send_message("It's not your turn.", ephemeral=True)
-                return
-            session = get_session(self.channel_id)
-            if not session:
-                await interaction.response.send_message("No active session.", ephemeral=True)
-                return
-            if self.action == "ban":
-                session["bans"].append(map_name)
-            else:
-                session["picks"].append(map_name)
-            session["step"] += 1
-            await self._advance(interaction, session)
-        return callback
-
-    def _make_side_callback(self, side: str):
-        async def callback(interaction: discord.Interaction):
-            if self.role_id not in [r.id for r in interaction.user.roles]:
-                await interaction.response.send_message("It's not your turn.", ephemeral=True)
-                return
-            session = get_session(self.channel_id)
-            if not session:
-                await interaction.response.send_message("No active session.", ephemeral=True)
-                return
-            other_key = "team2" if self.team_key == "team1" else "team1"
-            attacker = session[self.team_key + "_name"] if side == "Attack" else session[other_key + "_name"]
-            session["sides"].append(attacker)
-            session["step"] += 1
-            await self._advance(interaction, session)
-        return callback
-
-    async def _advance(self, interaction: discord.Interaction, session: dict):
-        save_session(self.channel_id, session)
-        if session["step"] >= len(STEPS):
-            await interaction.response.edit_message(embed=summary_embed(session, done=True), view=None)
-            delete_session(self.channel_id)
-        else:
-            await interaction.response.edit_message(embed=summary_embed(session), view=MapBanView(session, self.channel_id))
+            self.add_item(MapButton(
+                label="Attack", style=discord.ButtonStyle.blurple,
+                channel_id=channel_id, role_id=role_id,
+                action="side", team_key=team_key, value="Attack"
+            ))
+            self.add_item(MapButton(
+                label="Defense", style=discord.ButtonStyle.grey,
+                channel_id=channel_id, role_id=role_id,
+                action="side", team_key=team_key, value="Defense"
+            ))
 
 
 class CoinFlipView(View):
