@@ -3,11 +3,13 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from discord.ui import View, Button, Modal, TextInput
-import json, os
-from datetime import datetime
+import json, os, asyncio
+from datetime import datetime, timedelta
 from .faction_utils import get_faction_role, get_faction_channel
 
-REQUESTS_FILE = "/opt/render/project/src/data/roster_requests.json"
+REQUESTS_FILE  = "/opt/render/project/src/data/roster_requests.json"
+SUB_EXPIRY_FILE = "/opt/render/project/src/data/sub_expiries.json"
+SUB_ROLE_DAYS  = 10
 PURPLE = 0x9b59b6
 
 
@@ -518,6 +520,17 @@ class RequestAdminView(View):
                         await sub_in.add_roles(tier_role, reason="Sub approved")
                 except discord.Forbidden:
                     pass
+                # Schedule auto-removal after SUB_ROLE_DAYS
+                expiries = load_json(SUB_EXPIRY_FILE)
+                expiry_key = f"{guild.id}_{sub_in.id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+                expiries[expiry_key] = {
+                    "guild_id": guild.id,
+                    "member_id": sub_in.id,
+                    "team_role_id": team_role.id,
+                    "tier_role_id": tier_role.id if tier_role else None,
+                    "expires_at": (datetime.utcnow() + timedelta(days=SUB_ROLE_DAYS)).isoformat()
+                }
+                save_json(SUB_EXPIRY_FILE, expiries)
 
             if public_ch:
                 embed = discord.Embed(title="Sub Approved", color=PURPLE, timestamp=datetime.utcnow())
@@ -586,6 +599,45 @@ class RosterManager(commands.Cog):
 
     async def cog_load(self):
         self.bot.add_view(RequestAdminView())
+        self._sub_expiry_task = self.bot.loop.create_task(self._sub_expiry_loop())
+
+    async def cog_unload(self):
+        if hasattr(self, "_sub_expiry_task"):
+            self._sub_expiry_task.cancel()
+
+    async def _sub_expiry_loop(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                expiries = load_json(SUB_EXPIRY_FILE)
+                now = datetime.utcnow()
+                removed_keys = []
+                for key, entry in expiries.items():
+                    if now >= datetime.fromisoformat(entry["expires_at"]):
+                        guild = self.bot.get_guild(entry["guild_id"])
+                        if guild:
+                            member = guild.get_member(entry["member_id"])
+                            if member:
+                                roles_to_remove = []
+                                team_role = guild.get_role(entry["team_role_id"])
+                                if team_role:
+                                    roles_to_remove.append(team_role)
+                                if entry.get("tier_role_id"):
+                                    tier_role = guild.get_role(entry["tier_role_id"])
+                                    if tier_role:
+                                        roles_to_remove.append(tier_role)
+                                try:
+                                    await member.remove_roles(*roles_to_remove, reason="Sub role expired after 10 days")
+                                except discord.Forbidden:
+                                    pass
+                        removed_keys.append(key)
+                for key in removed_keys:
+                    expiries.pop(key, None)
+                if removed_keys:
+                    save_json(SUB_EXPIRY_FILE, expiries)
+            except Exception as e:
+                print(f"Sub expiry loop error: {e}")
+            await asyncio.sleep(3600)
 
     @app_commands.command(name="rosterchange", description="Request a roster change for your team")
     @app_commands.describe(
