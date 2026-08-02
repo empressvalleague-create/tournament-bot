@@ -8,7 +8,7 @@ WEBHOOK_URL = os.getenv("MATCH_RESULTS_WEBHOOK", "")
 
 
 def is_results_channel(channel) -> bool:
-    return "match-results" in channel.name.lower() or "match_results" in channel.name.lower()
+    return "match-times" in channel.name.lower()
 
 
 class Forwarder(commands.Cog):
