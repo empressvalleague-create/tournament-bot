@@ -66,11 +66,14 @@ class Forwarder(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 webhook = discord.Webhook.from_url(WEBHOOK_URL, session=session)
                 for embed in message.embeds:
-                    await webhook.send(
+                    sent = await webhook.send(
                         embed=resolve_mentions(embed, message.guild),
                         username=message.guild.name,
                         avatar_url=message.guild.icon.url if message.guild.icon else discord.utils.MISSING,
+                        wait=True,
                     )
+                    for emoji in ("✅", "❌"):
+                        await self.bot.http.add_reaction(sent.channel_id, sent.id, emoji)
         except Exception as e:
             print(f"Forwarder error: {e}")
 
