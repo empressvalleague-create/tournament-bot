@@ -73,7 +73,7 @@ class Forwarder(commands.Cog):
                         wait=True,
                     )
                     for emoji in ("✅", "❌"):
-                        await self.bot.http.add_reaction(sent.channel_id, sent.id, emoji)
+                        await self.bot.http.add_reaction(sent.channel.id, sent.id, emoji)
         except Exception as e:
             print(f"Forwarder error: {e}")
 
