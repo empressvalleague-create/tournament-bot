@@ -9,7 +9,7 @@ from .faction_utils import get_faction_role, get_faction_channel
 
 REQUESTS_FILE  = "/opt/render/project/src/data/roster_requests.json"
 SUB_EXPIRY_FILE = "/opt/render/project/src/data/sub_expiries.json"
-SUB_ROLE_DAYS  = 10
+SUB_ROLE_DAYS  = 8
 PURPLE = 0x9b59b6
 
 
