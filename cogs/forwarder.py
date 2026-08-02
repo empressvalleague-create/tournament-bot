@@ -14,13 +14,17 @@ def is_results_channel(channel) -> bool:
 class Forwarder(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        print(f"Forwarder cog loaded. Webhook set: {bool(WEBHOOK_URL)}")
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not WEBHOOK_URL:
-            print("Forwarder: MATCH_RESULTS_WEBHOOK not set, skipping.")
-            return
         if not isinstance(message.channel, discord.TextChannel):
+            return
+        # Debug: log every message channel name so we can confirm the event fires
+        print(f"Forwarder on_message: #{message.channel.name} | embeds={len(message.embeds)} | author_bot={message.author.bot}")
+
+        if not WEBHOOK_URL:
+            print("Forwarder: MATCH_RESULTS_WEBHOOK not set.")
             return
         if not is_results_channel(message.channel):
             return
