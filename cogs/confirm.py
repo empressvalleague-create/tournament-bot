@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ui import View, Button, Select
 import json, os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from .faction_utils import get_faction_channel
 
 CONFIRM_FILE = "/opt/render/project/src/data/pending_confirms.json"
@@ -43,6 +44,18 @@ NA_TIMEZONES = [
 def get_next_14_dates():
     today = datetime.utcnow().date()
     return [(today + timedelta(days=i)).strftime("%A, %b %d") for i in range(14)]
+
+def state_to_unix(state: dict) -> int | None:
+    """Convert state day/time/timezone to a Unix timestamp, or None on failure."""
+    try:
+        year = datetime.utcnow().year
+        dt_str = f"{state['day']} {year} {state['time']}"
+        tz = ZoneInfo(state.get("timezone", "America/New_York"))
+        dt = datetime.strptime(dt_str, "%A, %b %d %Y %I:%M %p").replace(tzinfo=tz)
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
 
 AM_TIMES = [
     "9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM",
@@ -313,12 +326,14 @@ class OpponentApprovalView(View):
 
             times_ch = get_faction_channel(guild, faction, "match-times") if faction else get_channel_by_names(guild, "match-times", "Match-Times")
             if times_ch:
+                unix = state_to_unix(state)
+                time_str = f"<t:{unix}:F> (<t:{unix}:R>)" if unix else f"**{state['day']}** at **{state['time']}** {state['timezone_label']}"
                 pub = discord.Embed(
                     title="Match Scheduled!",
                     description=(
                         f"## {team1_role.mention if team1_role else state['team1_name']}  vs  "
                         f"{team2_role.mention if team2_role else state['team2_name']}\n"
-                        f"**{state['day']}** at **{state['time']}** {state['timezone_label']}"
+                        f"{time_str}"
                     ),
                     color=PURPLE,
                     timestamp=datetime.utcnow()
