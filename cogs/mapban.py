@@ -6,8 +6,10 @@ from discord.ui import View, Button
 import json, os, random
 from datetime import datetime
 
-MAPBAN_FILE = "/opt/render/project/src/data/mapban_sessions.json"
-POOL_FILE   = "/opt/render/project/src/data/map_pool.json"
+MAPBAN_FILE     = "/opt/render/project/src/data/mapban_sessions.json"
+POOL_FILE       = "/opt/render/project/src/data/map_pool.json"
+COINFLIP_FILE   = "/opt/render/project/src/data/coinflip_counts.json"
+MAX_COINFLIPS   = 3
 PURPLE = 0x9b59b6
 
 def load_json(path):
@@ -50,6 +52,15 @@ def save_pool(guild_id, maps):
     data = load_json(POOL_FILE)
     data[str(guild_id)] = maps
     save_json(POOL_FILE, data)
+
+def get_coinflip_count(channel_id: int) -> int:
+    return load_json(COINFLIP_FILE).get(str(channel_id), 0)
+
+def increment_coinflip_count(channel_id: int) -> int:
+    data = load_json(COINFLIP_FILE)
+    data[str(channel_id)] = data.get(str(channel_id), 0) + 1
+    save_json(COINFLIP_FILE, data)
+    return data[str(channel_id)]
 
 # Ban/pick/side sequence
 STEPS = [
@@ -281,6 +292,7 @@ class PickTeamView(View):
             "started_at": datetime.utcnow().isoformat()
         }
         save_session(self.channel_id, session)
+        increment_coinflip_count(self.channel_id)
         await interaction.response.edit_message(embed=summary_embed(session), view=MapBanView(session, self.channel_id))
         try:
             msg = await interaction.original_response()
@@ -321,6 +333,13 @@ class MapBan(commands.Cog):
             return
         if get_session(interaction.channel.id):
             await interaction.response.send_message("A map ban is already in progress in this channel.", ephemeral=True)
+            return
+        count = get_coinflip_count(interaction.channel.id)
+        if count >= MAX_COINFLIPS:
+            await interaction.response.send_message(
+                f"This channel has already used `/coinflip` {MAX_COINFLIPS} times. No more map bans allowed here.",
+                ephemeral=True
+            )
             return
         if not load_pool(interaction.guild.id):
             await interaction.response.send_message("No map pool set. An admin must run /pool first.", ephemeral=True)
