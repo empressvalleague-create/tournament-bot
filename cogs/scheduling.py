@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from .faction_utils import get_member_faction, get_faction_category
 
 SCHEDULE_FILE = "/opt/render/project/src/data/schedule_channels.json"
-AUTO_DELETE_DAYS = 8
+AUTO_DELETE_DAYS = 12
 PURPLE = 0x9b59b6
 
 SCHEDULE_MESSAGE = """All scheduling communications should occur in this channel. **Please start the conversation with the following format:**
